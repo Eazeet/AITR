@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restoration Copilot Chat</title>
+    <style>
+        /* General Styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #2c2f33;
+            color: #dcdfe4;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 700px;
+            width: 100%;
+            background-color: #23272a;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Header */
+        h2 {
+            color: #ffffff;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* Chat Box Styling */
+        .chat-box {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #3f4448;
+            border-radius: 10px;
+            padding: 15px;
+            background-color: #36393f;
+            margin-bottom: 20px;
+            scroll-behavior: smooth;
+            position: relative;
+        }
+
+        /* Individual Message Styles */
+        .chat-box .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 10px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        /* User and Assistant Messages */
+        .chat-box .user {
+            background-color: #4f545c;
+            color: #ffffff;
+            align-self: flex-end;
+        }
+
+        .chat-box .assistant {
+            background-color: #7289da;
+            color: #ffffff;
+            align-self: flex-start;
+        }
+
+        /* Spinner Styling */
+        .spinner {
+            display: none;
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #7289da;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Input Box and Buttons */
+        .input-box {
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-box textarea {
+            flex-grow: 1;
+            padding: 10px;
+            height: 70px;
+            border-radius: 8px;
+            border: none;
+            background-color: #2f3136;
+            color: #dcdfe4;
+            resize: none;
+            font-size: 14px;
+        }
+
+        .input-box textarea:focus {
+            outline: none;
+            border: 1px solid #7289da;
+        }
+
+        button {
+            background-color: #7289da;
+            color: #ffffff;
+            border: none;
+            padding: 12px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #5b6eae;
+        }
+
+        button:focus {
+            outline: none;
+        }
+
+        /* Image Styling */
+        img {
+            max-width: 80%;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Restoration Copilot Chat</h2>
+        <div class="chat-box" id="chatBox">
+            <!-- Loading spinner -->
+            <div class="spinner" id="spinner"></div>
+            <!-- Messages will be displayed here -->
+        </div>
+
+        <div class="input-box">
+            <textarea id="textInput" placeholder="Enter your message..."></textarea>
+            <input type="file" id="fileInput" multiple onchange="handleFileUpload()">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- Include marked.js for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        let threadId = localStorage.getItem("thread_id");
+
+        // Function to append a message to the chat box
+        function appendMessage(sender, message, isMarkdown = false) {
+            const chatBox = document.getElementById("chatBox");
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "message " + (sender === "You" ? "user" : "assistant");
+
+            // If markdown, use marked.js to render HTML from markdown
+            if (isMarkdown) {
+                messageDiv.innerHTML = marked.parse(message);
+            } else {
+                messageDiv.innerHTML = message;
+            }
+
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Function to append images to the chat box
+        function appendImage(sender, imageUrl) {
+            const chatBox = document.getElementById("chatBox");
+            const imageDiv = document.createElement("div");
+            const img = document.createElement("img");
+            img.src = imageUrl;
+            imageDiv.className = "message " + (sender === "You" ? "user" : "assistant");
+            imageDiv.appendChild(img);
+            chatBox.appendChild(imageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Handle file upload and display immediately
+        function handleFileUpload() {
+            const fileInput = document.getElementById("fileInput").files;
+            if (fileInput.length > 0) {
+                for (let i = 0; i < fileInput.length; i++) {
+                    const imageURL = URL.createObjectURL(fileInput[i]);
+                    appendImage("You", imageURL);
+                }
+            }
+        }
+
+        // Function to show or hide the spinner
+        function toggleSpinner(show) {
+            const spinner = document.getElementById("spinner");
+            if (show) {
+                spinner.style.display = 'block';
+            } else {
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Function to send message to the backend
+        async function sendMessage() {
+            const textInput = document.getElementById("textInput").value;
+            const fileInput = document.getElementById("fileInput").files;
+            const formData = new FormData();
+
+            formData.append("text", textInput);
+
+            for (let i = 0; i < fileInput.length; i++) {
+                formData.append("files", fileInput[i]);
+            }
+
+            // Show spinner before sending the request
+            toggleSpinner(true);
+
+            try {
+                const response = await fetch("/unified_inference/", {
+                    method: "POST",
+                    headers: {
+                        "X-Thread-ID": threadId || ""  // Pass thread ID if it exists
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                document.getElementById("textInput").value = "";  // Clear text input
+                document.getElementById("fileInput").value = "";  // Clear file input after sending
+
+                // Store thread_id for future messages
+                threadId = response.headers.get("X-Thread-ID");
+                localStorage.setItem("thread_id", threadId);
+
+                // Display user's message
+                appendMessage("You", textInput);
+
+                // Display server response (use markdown for proper rendering)
+                appendMessage("Assistant", data.chatbot_response, true);
+
+            } catch (error) {
+                appendMessage("System", `Error: ${error}`);
+            } finally {
+                // Hide spinner after receiving the response
+                toggleSpinner(false);
+            }
+        }
+    </script>
+</body>
+</html>
